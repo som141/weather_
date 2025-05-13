@@ -23,4 +23,16 @@
         android:text="Loading..."
         android:textColor="#AAAAAA"
         android:gravity="center" />
+
+    <!-- ✅ 새로고침 버튼 추가 -->
+    <Button
+        android:id="@+id/btn_refresh"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="🔄 새로고침"
+        android:textColor="#FFFFFF"
+        android:background="#444444"
+        android:padding="4dp"
+        android:textSize="12sp"
+        android:layout_marginTop="8dp"/>
 </LinearLayout>
