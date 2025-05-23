@@ -1,40 +1,72 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
+    android:orientation="vertical"
+    android:padding="8dp"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:padding="8dp">
+    android:background="@android:color/white">
 
+    <!-- 위치 -->
     <TextView
-        android:id="@+id/tv_widget_temp"
-        android:layout_width="wrap_content"
+        android:id="@+id/tv_widget_location"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="--°C"
-        android:textSize="20sp"/>
+        android:text="위치: 알 수 없음"
+        android:textSize="14sp"
+        android:textColor="@android:color/black"/>
 
+    <!-- 시간 -->
     <TextView
-        android:id="@+id/tv_widget_high_low"
-        android:layout_width="wrap_content"
+        android:id="@+id/tv_widget_time"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_below="@id/tv_widget_temp"
-        android:layout_marginTop="4dp"
-        android:text="--°C/--°C"
-        android:textSize="16sp"/>
+        android:text="시간: --:--"
+        android:textSize="14sp"
+        android:textColor="@android:color/black"/>
 
-    <TextView
-        android:id="@+id/tv_widget_cond"
-        android:layout_width="wrap_content"
+    <!-- 날씨 정보 -->
+    <LinearLayout
+        android:orientation="horizontal"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_below="@id/tv_widget_high_low"
-        android:layout_marginTop="4dp"
-        android:text="맑음"
-        android:textSize="16sp"/>
+        android:gravity="center_vertical"
+        android:layout_marginTop="8dp">
 
+        <ImageView
+            android:id="@+id/iv_widget_weather_icon"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:contentDescription="날씨 아이콘"/>
+
+        <TextView
+            android:id="@+id/tv_widget_temp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:text="--°C"
+            android:textSize="18sp"
+            android:textColor="@android:color/black"/>
+
+        <TextView
+            android:id="@+id/tv_widget_high_low"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:text="--°C/--°C"
+            android:textSize="14sp"
+            android:textColor="@android:color/black"/>
+    </LinearLayout>
+
+    <!-- 새로고침 버튼 -->
     <ImageButton
         android:id="@+id/btn_widget_refresh"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="end|top"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:layout_gravity="end"
+        android:layout_marginTop="8dp"
         android:src="@drawable/ic_refresh"
-        android:contentDescription="새로고침"/>
-</FrameLayout>
+        android:contentDescription="새로고침"
+        android:background="@android:color/transparent"/>
+</LinearLayout>

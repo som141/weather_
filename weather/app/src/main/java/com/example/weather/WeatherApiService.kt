@@ -17,7 +17,7 @@ interface ApiService {
         @Query("nx") nx: Int,
         @Query("ny") ny: Int,
         @Query("dataType") dataType: String = "JSON",
-        @Query("numOfRows") numOfRows: Int = 100,
+        @Query("numOfRows") numOfRows: Int = 10000,
         @Query("pageNo") pageNo: Int = 1
     ): Call<UltraSrtFcstResponse>
 
@@ -30,7 +30,7 @@ interface ApiService {
         @Query("nx") nx: Int,
         @Query("ny") ny: Int,
         @Query("dataType") dataType: String = "JSON",
-        @Query("numOfRows") numOfRows: Int = 100,
+        @Query("numOfRows") numOfRows: Int = 10000,
         @Query("pageNo") pageNo: Int = 1
     ): Call<VilageFcstResponse>
 }
