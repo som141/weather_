@@ -1,38 +1,40 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:orientation="vertical"
-    android:background="#222222"
-    android:padding="8dp"
-    android:gravity="center"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content">
+    android:layout_height="wrap_content"
+    android:padding="8dp">
 
     <TextView
-        android:id="@+id/tv_temperature"
+        android:id="@+id/tv_widget_temp"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="--°C"
-        android:textColor="#FFFFFF"
-        android:textSize="18sp"
-        android:gravity="center" />
+        android:textSize="20sp"/>
 
     <TextView
-        android:id="@+id/tv_condition"
+        android:id="@+id/tv_widget_high_low"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Loading..."
-        android:textColor="#AAAAAA"
-        android:gravity="center" />
+        android:layout_below="@id/tv_widget_temp"
+        android:layout_marginTop="4dp"
+        android:text="--°C/--°C"
+        android:textSize="16sp"/>
 
-    <!-- ✅ 새로고침 버튼 추가 -->
-    <Button
-        android:id="@+id/btn_refresh"
+    <TextView
+        android:id="@+id/tv_widget_cond"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="🔄 새로고침"
-        android:textColor="#FFFFFF"
-        android:background="#444444"
-        android:padding="4dp"
-        android:textSize="12sp"
-        android:layout_marginTop="8dp"/>
-</LinearLayout>
+        android:layout_below="@id/tv_widget_high_low"
+        android:layout_marginTop="4dp"
+        android:text="맑음"
+        android:textSize="16sp"/>
+
+    <ImageButton
+        android:id="@+id/btn_widget_refresh"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end|top"
+        android:src="@drawable/ic_refresh"
+        android:contentDescription="새로고침"/>
+</FrameLayout>
