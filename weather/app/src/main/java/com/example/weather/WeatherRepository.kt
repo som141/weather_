@@ -14,8 +14,8 @@ import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import com.example.weather.network.RetrofitClient
-
 import com.google.android.gms.location.LocationServices
+import com.google.android.gms.tasks.CancellationTokenSource
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
@@ -40,12 +40,15 @@ class WeatherRepository(private val context: Context) {
     private val prefs: SharedPreferences =
         context.getSharedPreferences("weather_prefs", Context.MODE_PRIVATE)
 
+    // var로 변경: fetchLocation 성공 시 실제 위치 격자로 덮어쓰기
+    private var nx: Int = 60
+    private var ny: Int = 127
+
     private val serviceKey = "nVI4pgoe68ebaYhYMSSCyBFeldG0NThgzKEsA6mfpCNJ7jNxG0qbRzeUvUtjN6S42+Ca+Vnp6+Md/NbOJ9Z5Ag=="
-    private val nx = 60
-    private val ny = 127
 
     /**
-     * 현재 디바이스 위치(시도·동)를 Geocoder로 동기 조회
+     * 현재 디바이스 위치(시도·동)를 Geocoder로 조회하고
+     * GridConverter로 격자좌표(nx,ny)를 업데이트
      */
     @SuppressLint("MissingPermission")
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
@@ -55,53 +58,75 @@ class WeatherRepository(private val context: Context) {
                 context, Manifest.permission.ACCESS_FINE_LOCATION
             ) != PackageManager.PERMISSION_GRANTED
         ) {
+            Log.d("WeatherRepo", "fetchLocation: 권한 없음")
             onResult("위치: 권한 없음")
             return
         }
 
-        // 2) 마지막 위치 요청
+        // 2) 위치 서비스 활성화 체크
+        val lm = context.getSystemService(Context.LOCATION_SERVICE) as android.location.LocationManager
+        if (!lm.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER)
+            && !lm.isProviderEnabled(android.location.LocationManager.NETWORK_PROVIDER)
+        ) {
+            Log.d("WeatherRepo", "fetchLocation: 위치 서비스 꺼짐")
+            onResult("위치: GPS 꺼짐")
+            return
+        }
+
+        // 3) 최신 위치 요청
         val fused = LocationServices.getFusedLocationProviderClient(context)
-        fused.lastLocation
+        val tokenSource = CancellationTokenSource()
+        fused.getCurrentLocation(
+            com.google.android.gms.location.Priority.PRIORITY_HIGH_ACCURACY,
+            tokenSource.token
+        )
             .addOnSuccessListener { loc ->
                 if (loc == null) {
+                    Log.d("WeatherRepo", "getCurrentLocation: 위치 정보가 null")
                     onResult("위치: 알 수 없음")
                     return@addOnSuccessListener
                 }
+
+                // --- 격자좌표 변환 ---
+                val grid = GridConverter.convert(loc.latitude, loc.longitude)
+                nx = grid.x
+                ny = grid.y
+                Log.d("WeatherRepo", "격자변환 → nx=$nx, ny=$ny")
+
+                // --- Geocoder로 시·동 이름 조회 ---
                 try {
-                    val geo = Geocoder(context, Locale.KOREA)
-                    // API 33+ 에서 추가된 비동기 오버로드
-                    geo.getFromLocation(
+                    Geocoder(context, Locale.KOREA).getFromLocation(
                         loc.latitude,
                         loc.longitude,
                         1,
                         object : Geocoder.GeocodeListener {
                             override fun onGeocode(addresses: List<Address>) {
-                                // 받은 주소 리스트를 여기서만 처리
                                 if (addresses.isNotEmpty()) {
                                     val addr = addresses[0]
                                     val city = addr.adminArea.orEmpty()
                                     val dong = addr.subLocality ?: addr.locality.orEmpty()
                                     val locStr = "$city $dong"
-                                    prefs.edit()
-                                        .putString("weather_location", locStr)
-                                        .apply()
+                                    Log.d("WeatherRepo", "onGeocode: $locStr")
+                                    prefs.edit().putString("weather_location", locStr).apply()
                                     onResult(locStr)
                                 } else {
+                                    Log.d("WeatherRepo", "onGeocode: 주소 없음")
                                     onResult("위치: 알 수 없음")
                                 }
                             }
                         }
                     )
                 } catch (e: Exception) {
-                    Log.e("WeatherRepo", "Geocoder error", e)
+                    Log.e("WeatherRepo", "Geocoder 오류", e)
                     onResult("위치: 알 수 없음")
                 }
             }
             .addOnFailureListener { e ->
-                Log.e("WeatherRepo", "Location fetch failed", e)
+                Log.e("WeatherRepo", "getCurrentLocation 실패", e)
                 onResult("위치: 알 수 없음")
             }
     }
+
     /**
      * 초단기예보: 현재 시점 기준 → SharedPreferences 저장
      */
@@ -216,7 +241,5 @@ class WeatherRepository(private val context: Context) {
                 onComplete()
             }
         })
-
     }
-
 }
