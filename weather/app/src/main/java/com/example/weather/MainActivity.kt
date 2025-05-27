@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -115,6 +116,8 @@ fun WeatherApp(repo: WeatherRepository) {
     var hourly       by remember { mutableStateOf(listOf<HourlyForecast>()) }
     var locationText by remember { mutableStateOf("위치: 로딩 중...") }
     var timeText     by remember { mutableStateOf("") }
+    var pm10 by remember { mutableStateOf("--") }
+    var pm25 by remember { mutableStateOf("--") }
 
     // 1) 앱 시작 시 한 번: 날씨 데이터
     LaunchedEffect(Unit) {
@@ -131,6 +134,7 @@ fun WeatherApp(repo: WeatherRepository) {
             val l = prefs.getString("weather_daily_low","--")  ?: "--"
             highLow = "$h°C/$l°C"
         }
+
     }
 
     // 2) 앱 시작 시 한 번: 위치 조회
@@ -138,8 +142,18 @@ fun WeatherApp(repo: WeatherRepository) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             repo.fetchLocation { loc ->
                 locationText = loc
+                repo.fetchStationForRegion("수지") { stations ->
+                    Log.d("MainActivity", "‘수지’ 포함 측정소: $stations")  // 여기서 ["용인시수지구"] 같은 이름이 보일 것
+                    stations.firstOrNull()?.let { station ->
+                        repo.fetchDustData(station) { pm10, pm25 ->
+                            Log.d("MainActivity", "PM10=$pm10, PM2.5=$pm25")
+                        }
+                    }
+                }
             }
+
         }
+
     }
 
     // 3) 매초 시계 갱신

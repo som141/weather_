@@ -13,6 +13,8 @@ import android.os.Build
 import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
+import com.example.weather.model.RealTimeDustResponse
+import com.example.weather.model.RealTimeStationListResponse
 import com.example.weather.network.RetrofitClient
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.tasks.CancellationTokenSource
@@ -45,7 +47,7 @@ class WeatherRepository(private val context: Context) {
     private var ny: Int = 127
 
     private val serviceKey = "nVI4pgoe68ebaYhYMSSCyBFeldG0NThgzKEsA6mfpCNJ7jNxG0qbRzeUvUtjN6S42+Ca+Vnp6+Md/NbOJ9Z5Ag=="
-
+    private val misekey="nVI4pgoe68ebaYhYMSSCyBFeldG0NThgzKEsA6mfpCNJ7jNxG0qbRzeUvUtjN6S42+Ca+Vnp6+Md/NbOJ9Z5Ag=="
     /**
      * 현재 디바이스 위치(시도·동)를 Geocoder로 조회하고
      * GridConverter로 격자좌표(nx,ny)를 업데이트
@@ -242,4 +244,75 @@ class WeatherRepository(private val context: Context) {
             }
         })
     }
+    fun fetchStationForRegion(
+        region: String,        // ex: "용인시 수지구"
+        onResult: (List<String>) -> Unit
+    ) {
+        RetrofitClient.airQualityService
+            .getStationList(serviceKey = misekey)
+            .enqueue(object : Callback<RealTimeStationListResponse> {
+                override fun onResponse(
+                    call: Call<RealTimeStationListResponse>,
+                    resp: Response<RealTimeStationListResponse>
+                ) {
+                    val stations = resp.body()
+                        ?.response
+                        ?.body
+                        ?.items
+                        ?.map { it.stationName }
+                        ?: emptyList()
+
+                    // 1) 공백으로 쪼개서 ["용인시","수지구"]
+                    val parts = region.split("\\s+".toRegex())
+
+                    // 2) stationName에 parts 중 하나라도 포함되면 통과
+                    val filtered = stations.filter { name ->
+                        parts.any { part -> name.contains(part) }
+                    }
+
+                    onResult(filtered)
+                }
+
+                override fun onFailure(call: Call<RealTimeStationListResponse>, t: Throwable) {
+                    Log.e("WeatherRepo", "fetchStationList failed", t)
+                    onResult(emptyList())
+                }
+            })
+    }
+    @RequiresApi(Build.VERSION_CODES.O)
+    fun fetchDustData(
+        stationName: String,
+        onComplete: (pm10: String, pm25: String) -> Unit
+    ) {
+        RetrofitClient.airQualityService.getRealTimeDust(
+            serviceKey = misekey,
+            stationName = stationName
+        ).enqueue(object : Callback<RealTimeDustResponse> {
+            override fun onResponse(
+                call: Call<RealTimeDustResponse>,
+                resp: Response<RealTimeDustResponse>
+            ) {
+                val item = resp.body()
+                    ?.response
+                    ?.body
+                    ?.items  // 바로 리스트
+                    ?.firstOrNull()
+
+                val pm10 = item?.pm10 ?: "--"
+                val pm25 = item?.pm25 ?: "--"
+                Log.d("WeatherRepo", "Dust API URL: ${call.request().url()}")
+                // SharedPreferences 에도 저장해두면 나중에 Widget 등에서 편리합니다.
+                prefs.edit()
+                    .putString("weather_pm10", pm10)
+                    .putString("weather_pm25", pm25)
+                    .apply()
+
+                onComplete(pm10, pm25)
+            }
+
+            override fun onFailure(call: Call<RealTimeDustResponse>, t: Throwable) {
+                Log.e("WeatherRepo", "fetchDustData failed", t)
+                onComplete("--", "--")
+            }
+        })}
 }
