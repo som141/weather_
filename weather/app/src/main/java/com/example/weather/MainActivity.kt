@@ -3,8 +3,10 @@ package com.example.weather
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -41,20 +43,55 @@ import java.util.TimeZone
 class MainActivity : ComponentActivity() {
     private lateinit var repo: WeatherRepository
 
+    companion object {
+        private const val REQUEST_LOCATION = 100
+    }
+
     @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // 타임존 강제 설정
         TimeZone.setDefault(TimeZone.getTimeZone("Asia/Seoul"))
+
+        // 위치 권한 요청
         ActivityCompat.requestPermissions(
             this,
-            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION),
-            100
+            arrayOf(
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            ),
+            REQUEST_LOCATION
         )
+
         repo = WeatherRepository(this)
         enableEdgeToEdge()
+
         setContent {
             WeatherTheme {
                 WeatherApp(repo)
+            }
+        }
+    }
+
+    // 권한 요청 결과 처리
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
+    override fun onRequestPermissionsResult(
+        requestCode: Int, permissions: Array<out String>, grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQUEST_LOCATION) {
+            val granted = grantResults.isNotEmpty()
+                    && grantResults[0] == PackageManager.PERMISSION_GRANTED
+            if (granted) {
+                Toast.makeText(this, "위치 권한이 허용되었습니다.", Toast.LENGTH_SHORT).show()
+                // 권한 허용 직후에도 위치를 바로 가져옵니다.
+                repo.fetchLocation { /* 위치는 Composable 쪽에서 LaunchedEffect가 처리합니다 */ }
+            } else {
+                Toast.makeText(
+                    this,
+                    "위치 권한이 거부되어 현재 위치를 표시할 수 없습니다.",
+                    Toast.LENGTH_LONG
+                ).show()
             }
         }
     }
@@ -66,27 +103,27 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun WeatherApp(repo: WeatherRepository) {
     val context = LocalContext.current
-    val prefs = context.getSharedPreferences("weather_prefs", Context.MODE_PRIVATE)
+    val prefs   = context.getSharedPreferences("weather_prefs", Context.MODE_PRIVATE)
 
-    // 상태
-    var nowTemp by remember { mutableStateOf(prefs.getString("weather_temp","--") ?: "--") }
-    var ptyCode by remember { mutableStateOf("0") }
-    var skyCode by remember { mutableStateOf("1") }
-    var hourly by remember { mutableStateOf(listOf<HourlyForecast>()) }
-    var highLow by remember { mutableStateOf("--°C/--°C") }
-    var windDir by remember { mutableStateOf("--") }
-    var windSpd by remember { mutableStateOf("--") }
+    // --- 상태 변수 ---
+    var nowTemp      by remember { mutableStateOf(prefs.getString("weather_temp","--") ?: "--") }
+    var ptyCode      by remember { mutableStateOf(prefs.getString("weather_precip","0") ?: "0") }
+    var skyCode      by remember { mutableStateOf(prefs.getString("weather_sky","1")      ?: "1") }
+    var windDir      by remember { mutableStateOf(prefs.getString("weather_wind_dir","--")?: "--") }
+    var windSpd      by remember { mutableStateOf(prefs.getString("weather_wind_spd","--")?: "--") }
+    var highLow      by remember { mutableStateOf("--°C/--°C") }
+    var hourly       by remember { mutableStateOf(listOf<HourlyForecast>()) }
     var locationText by remember { mutableStateOf("위치: 로딩 중...") }
-    var timeText by remember { mutableStateOf("") }
+    var timeText     by remember { mutableStateOf("") }
 
-    // 데이터 로드
+    // 1) 앱 시작 시 한 번: 날씨 데이터
     LaunchedEffect(Unit) {
         repo.fetchUltraShortNow {
-            nowTemp  = prefs.getString("weather_temp","--") ?: "--"
-            ptyCode  = prefs.getString("weather_precip","0") ?: "0"
-            skyCode  = prefs.getString("weather_sky","1")      ?: "1"
-            windDir  = prefs.getString("weather_wind_dir","--")?: "--"
-            windSpd  = prefs.getString("weather_wind_spd","--")?: "--"
+            nowTemp = prefs.getString("weather_temp","--") ?: "--"
+            ptyCode = prefs.getString("weather_precip","0") ?: "0"
+            skyCode = prefs.getString("weather_sky","1")      ?: "1"
+            windDir = prefs.getString("weather_wind_dir","--")?: "--"
+            windSpd = prefs.getString("weather_wind_spd","--")?: "--"
         }
         repo.fetchHourlyForecastNext5Hours { hourly = it }
         repo.fetchDailyHighLow {
@@ -95,28 +132,30 @@ fun WeatherApp(repo: WeatherRepository) {
             highLow = "$h°C/$l°C"
         }
     }
-    // 위치/시간
+
+    // 2) 앱 시작 시 한 번: 위치 조회
     LaunchedEffect(Unit) {
-        val fused = LocationServices.getFusedLocationProviderClient(context)
-        try {
-            fused.lastLocation.await()?.let {
-                locationText = "위치: ${it.latitude.format(2)}, ${it.longitude.format(2)}"
-                prefs.edit().putString("weather_location", locationText).apply()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            repo.fetchLocation { loc ->
+                locationText = loc
             }
-        } catch (_: Exception) {}
+        }
     }
+
+    // 3) 매초 시계 갱신
     LaunchedEffect(Unit) {
-        while(true) {
-            timeText = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"))
+        while (true) {
+            timeText = LocalDateTime.now()
+                .format(DateTimeFormatter.ofPattern("HH:mm:ss"))
             delay(1000L)
         }
     }
 
-    // 배경색
-    val bg = when(ptyCode) {
+    // 배경색 결정
+    val bg = when (ptyCode) {
         "1","4" -> Color(0xFF90CAF9)
         "2","3" -> Color(0xFFB3E5FC)
-        else       -> if (skyCode=="1") Color(0xFFFFF59D) else Color(0xFFCFD8DC)
+        else    -> if (skyCode=="1") Color(0xFFFFF59D) else Color(0xFFCFD8DC)
     }
 
     Surface(modifier = Modifier.fillMaxSize(), color = bg) {
@@ -127,19 +166,25 @@ fun WeatherApp(repo: WeatherRepository) {
                     title = {
                         Column {
                             Text(locationText, style = MaterialTheme.typography.bodySmall)
-                            Text(timeText, style = MaterialTheme.typography.bodySmall)
+                            Text(timeText,     style = MaterialTheme.typography.bodySmall)
                         }
                     },
                     actions = {
                         IconButton(onClick = {
-                            repo.fetchUltraShortNow {}
+                            // 위치 포함 모든 데이터 리프레시
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                repo.fetchLocation { loc ->
+                                    locationText = loc
+                                }
+                            }
+                            repo.fetchUltraShortNow { }
                             repo.fetchHourlyForecastNext5Hours { hourly = it }
-                            repo.fetchDailyHighLow {}
+                            repo.fetchDailyHighLow { }
                         }) {
                             Icon(Icons.Default.Refresh, contentDescription = "새로고침")
                         }
                     },
-                    colors = TopAppBarDefaults.largeTopAppBarColors(containerColor=Color.Transparent)
+                    colors = TopAppBarDefaults.largeTopAppBarColors(containerColor = Color.Transparent)
                 )
             }
         ) { padding ->
@@ -154,7 +199,7 @@ fun WeatherApp(repo: WeatherRepository) {
                     Modifier
                         .fillMaxWidth()
                         .height(100.dp),
-                    colors = CardDefaults.cardColors(containerColor=bg)
+                    colors = CardDefaults.cardColors(containerColor = bg)
                 ) {
                     Row(
                         Modifier
@@ -162,20 +207,28 @@ fun WeatherApp(repo: WeatherRepository) {
                             .padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        val iconRes = when(ptyCode) {
+                        val iconRes = when (ptyCode) {
                             "1","4" -> R.drawable.img_2
                             "2","3" -> R.drawable.img_3
-                            else       -> if (skyCode=="1") R.drawable.img else R.drawable.img_1
+                            else    -> if (skyCode=="1") R.drawable.img else R.drawable.img_1
                         }
-                        Icon(painterResource(iconRes), contentDescription=null, modifier=Modifier.size(48.dp), tint=Color.Unspecified)
+                        Icon(
+                            painterResource(iconRes),
+                            contentDescription = null,
+                            modifier = Modifier.size(48.dp),
+                            tint = Color.Unspecified
+                        )
                         Spacer(Modifier.width(16.dp))
                         Column {
-                            Text("$nowTemp°C", style=MaterialTheme.typography.titleLarge)
-                            Text(highLow, style=MaterialTheme.typography.bodyMedium)
+                            Text("$nowTemp°C", style = MaterialTheme.typography.titleLarge)
+                            Text(highLow,    style = MaterialTheme.typography.bodyMedium)
                         }
                     }
                 }
+
                 Spacer(Modifier.height(16.dp))
+
+                // 온도 차트
                 TemperatureChart(
                     data = hourly,
                     modifier = Modifier
@@ -185,18 +238,32 @@ fun WeatherApp(repo: WeatherRepository) {
 
                 Spacer(Modifier.height(16.dp))
 
-                // 테이블: 전치 행
-                val times  = hourly.map { it.time.format(DateTimeFormatter.ofPattern("HH:mm")) }
-                val temps  = hourly.map { "${it.temperature}°C" }
-                val conds  = hourly.mapIndexed { i, hf ->
-                    when(hf.precip) {
-                        "1","4" -> "비"; "2" -> "비/눈"; "3" -> "눈"
-                        else -> when(hf.sky) { "1"->"맑음"; "3"->"구름많음"; "4"->"흐림"; else->"?" }
+                // 시간, 기온, 날씨 등 테이블
+                val times = hourly.map { it.time.format(DateTimeFormatter.ofPattern("HH:mm")) }
+                val temps = hourly.map { "${it.temperature}°C" }
+                val conds = hourly.map {
+                    when (it.precip) {
+                        "1","4" -> "비"
+                        "2"     -> "비/눈"
+                        "3"     -> "눈"
+                        else    -> when (it.sky) {
+                            "1" -> "맑음"
+                            "3" -> "구름많음"
+                            "4" -> "흐림"
+                            else-> "?"
+                        }
                     }
                 }
-                val skies  = hourly.map { when(it.sky) { "1"->"맑음"; "3"->"구름많음"; "4"->"흐림"; else->"?" }}
-                val dirs   = hourly.map { it.windDir }
-                val spds   = hourly.map { it.windSpd }
+                val skies = hourly.map {
+                    when (it.sky) {
+                        "1" -> "맑음"
+                        "3" -> "구름많음"
+                        "4" -> "흐림"
+                        else-> "?"
+                    }
+                }
+                val dirs = hourly.map { it.windDir }
+                val spds = hourly.map { it.windSpd }
 
                 listOf(
                     "시간" to times,
@@ -206,9 +273,14 @@ fun WeatherApp(repo: WeatherRepository) {
                     "풍향" to dirs,
                     "풍속" to spds
                 ).forEach { (label, rowVals) ->
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement=Arrangement.SpaceBetween) {
-                        Text(label, Modifier.weight(1f), style=MaterialTheme.typography.bodyMedium)
-                        rowVals.forEach { v -> Text(v, Modifier.weight(1f), style=MaterialTheme.typography.bodyMedium) }
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                        rowVals.forEach { v ->
+                            Text(v, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                        }
                     }
                     Spacer(Modifier.height(4.dp))
                 }
@@ -225,40 +297,23 @@ fun TemperatureChart(
 ) {
     if (data.isEmpty()) return
 
-    // 1) 데이터 파싱
+    // 데이터 파싱
     val temps = data.mapNotNull { it.temperature.toFloatOrNull() }
     val times = data.map { it.time.format(DateTimeFormatter.ofPattern("HH:mm")) }
-    val minT = temps.minOrNull() ?: return
-    val maxT = temps.maxOrNull() ?: return
+    val minT  = temps.minOrNull() ?: return
+    val maxT  = temps.maxOrNull() ?: return
 
     Canvas(modifier = modifier) {
-        // 전체 사이즈
         val fullW = size.width
         val fullH = size.height
-
-        // 2) 마진 설정 (픽셀)
         val marginLeft   = 50f
         val marginRight  = 20f
         val marginTop    = 16f
         val marginBottom = 40f
-
-        // 차트가 실제 그려질 영역
         val chartW = fullW - marginLeft - marginRight
         val chartH = fullH - marginTop - marginBottom
 
-        // x 간격
-        val count = temps.size
-        if (count < 2) return@Canvas
-        val dx = chartW / (count - 1)
-
-        // Android Paint (텍스트)
-        val textPaint = android.graphics.Paint().apply {
-            color = android.graphics.Color.BLACK
-            textSize = 28f
-            textAlign = android.graphics.Paint.Align.CENTER
-        }
-
-        // 3) 그리드 라인 (차트 내부)
+        // 그리드
         repeat(4) { i ->
             val y = marginTop + chartH * i / 4f
             drawLine(
@@ -266,11 +321,12 @@ fun TemperatureChart(
                 start = Offset(marginLeft, y),
                 end   = Offset(marginLeft + chartW, y),
                 strokeWidth = 1f,
-                pathEffect  = PathEffect.dashPathEffect(floatArrayOf(10f,10f), 0f)
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f,10f), 0f)
             )
         }
 
-        // 4) 온도 곡선
+        // 곡선
+        val dx = chartW / (temps.size - 1)
         val path = Path().apply {
             temps.forEachIndexed { i, t ->
                 val x = marginLeft + dx * i
@@ -280,7 +336,7 @@ fun TemperatureChart(
         }
         drawPath(path, Color(0xFF1976D2), style = Stroke(width = 4f, cap = StrokeCap.Round))
 
-        // 5) 포인트
+        // 포인트
         temps.forEachIndexed { i, t ->
             val x = marginLeft + dx * i
             val y = marginTop + (chartH - (t - minT) / (maxT - minT) * chartH)
@@ -288,48 +344,45 @@ fun TemperatureChart(
             drawCircle(Color(0xFF1976D2), radius = 4f, center = Offset(x, y))
         }
 
-        // 6) 축 그리기
-        // y축
+        // 축
         drawLine(Color.Black,
             start = Offset(marginLeft, marginTop),
             end   = Offset(marginLeft, marginTop + chartH),
             strokeWidth = 2f
         )
-        // x축
         drawLine(Color.Black,
             start = Offset(marginLeft, marginTop + chartH),
             end   = Offset(marginLeft + chartW, marginTop + chartH),
             strokeWidth = 2f
         )
 
-        // 7) y축 눈금 & 레이블 (min, 중간, max)
+        // 레이블
+        val textPaint = android.graphics.Paint().apply {
+            color = android.graphics.Color.BLACK
+            textSize = 28f
+            textAlign = android.graphics.Paint.Align.CENTER
+        }
         listOf(minT, (minT + maxT) / 2f, maxT).forEach { t ->
             val y = marginTop + (chartH - (t - minT) / (maxT - minT) * chartH)
-            // 눈금
             drawLine(Color.Black,
                 start = Offset(marginLeft - 10f, y),
                 end   = Offset(marginLeft, y),
                 strokeWidth = 2f
             )
-            // 레이블
             drawContext.canvas.nativeCanvas.drawText(
                 "${t.toInt()}°",
                 marginLeft - 30f,
-                y + textPaint.textSize/2f,
+                y + textPaint.textSize / 2f,
                 textPaint
             )
         }
-
-        // 8) x축 눈금 & 레이블
         times.forEachIndexed { i, label ->
             val x = marginLeft + dx * i
-            // 눈금
             drawLine(Color.Black,
                 start = Offset(x, marginTop + chartH),
                 end   = Offset(x, marginTop + chartH + 10f),
                 strokeWidth = 2f
             )
-            // 레이블
             drawContext.canvas.nativeCanvas.drawText(
                 label,
                 x,
@@ -339,6 +392,3 @@ fun TemperatureChart(
         }
     }
 }
-
-
-private fun Double.format(decimals: Int): String = "%.\$decimals f".format(this)
