@@ -142,7 +142,7 @@ fun WeatherApp(repo: WeatherRepository) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             repo.fetchLocation { loc ->
                 locationText = loc
-                repo.fetchStationForRegion("수지") { stations ->
+                repo.fetchStationForRegion("경기도") { stations ->
                     Log.d("MainActivity", "‘수지’ 포함 측정소: $stations")  // 여기서 ["용인시수지구"] 같은 이름이 보일 것
                     stations.firstOrNull()?.let { station ->
                         repo.fetchDustData(station) { pm10, pm25 ->
