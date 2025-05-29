@@ -51,10 +51,8 @@ class MainActivity : ComponentActivity() {
     @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // 타임존 강제 설정
         TimeZone.setDefault(TimeZone.getTimeZone("Asia/Seoul"))
 
-        // 위치 권한 요청
         ActivityCompat.requestPermissions(
             this,
             arrayOf(
@@ -74,19 +72,16 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // 권한 요청 결과 처리
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     override fun onRequestPermissionsResult(
         requestCode: Int, permissions: Array<out String>, grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == REQUEST_LOCATION) {
-            val granted = grantResults.isNotEmpty()
-                    && grantResults[0] == PackageManager.PERMISSION_GRANTED
+            val granted = grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED
             if (granted) {
                 Toast.makeText(this, "위치 권한이 허용되었습니다.", Toast.LENGTH_SHORT).show()
-                // 권한 허용 직후에도 위치를 바로 가져옵니다.
-                repo.fetchLocation { /* 위치는 Composable 쪽에서 LaunchedEffect가 처리합니다 */ }
+                repo.fetchLocation { /* Composable 에서 처리 */ }
             } else {
                 Toast.makeText(
                     this,
@@ -104,59 +99,51 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun WeatherApp(repo: WeatherRepository) {
     val context = LocalContext.current
-    val prefs   = context.getSharedPreferences("weather_prefs", Context.MODE_PRIVATE)
+    val prefs = context.getSharedPreferences("weather_prefs", Context.MODE_PRIVATE)
 
-    // --- 상태 변수 ---
-    var nowTemp      by remember { mutableStateOf(prefs.getString("weather_temp","--") ?: "--") }
-    var ptyCode      by remember { mutableStateOf(prefs.getString("weather_precip","0") ?: "0") }
-    var skyCode      by remember { mutableStateOf(prefs.getString("weather_sky","1")      ?: "1") }
-    var windDir      by remember { mutableStateOf(prefs.getString("weather_wind_dir","--")?: "--") }
-    var windSpd      by remember { mutableStateOf(prefs.getString("weather_wind_spd","--")?: "--") }
-    var highLow      by remember { mutableStateOf("--°C/--°C") }
-    var hourly       by remember { mutableStateOf(listOf<HourlyForecast>()) }
+    var nowTemp by remember { mutableStateOf(prefs.getString("weather_temp", "--") ?: "--") }
+    var ptyCode by remember { mutableStateOf(prefs.getString("weather_precip", "0") ?: "0") }
+    var skyCode by remember { mutableStateOf(prefs.getString("weather_sky", "1") ?: "1") }
+    var windDir by remember { mutableStateOf(prefs.getString("weather_wind_dir", "--") ?: "--") }
+    var windSpd by remember { mutableStateOf(prefs.getString("weather_wind_spd", "--") ?: "--") }
+    var highLow by remember { mutableStateOf("--°C/--°C") }
+    var hourly by remember { mutableStateOf(listOf<HourlyForecast>()) }
     var locationText by remember { mutableStateOf("위치: 로딩 중...") }
-    var timeText     by remember { mutableStateOf("") }
+    var timeText by remember { mutableStateOf("") }
     var pm10 by remember { mutableStateOf("--") }
     var pm25 by remember { mutableStateOf("--") }
 
-    // 1) 앱 시작 시 한 번: 날씨 데이터
+    // 날씨 데이터 초기 로드
     LaunchedEffect(Unit) {
         repo.fetchUltraShortNow {
-            nowTemp = prefs.getString("weather_temp","--") ?: "--"
-            ptyCode = prefs.getString("weather_precip","0") ?: "0"
-            skyCode = prefs.getString("weather_sky","1")      ?: "1"
-            windDir = prefs.getString("weather_wind_dir","--")?: "--"
-            windSpd = prefs.getString("weather_wind_spd","--")?: "--"
+            nowTemp = prefs.getString("weather_temp", "--") ?: "--"
+            ptyCode = prefs.getString("weather_precip", "0") ?: "0"
+            skyCode = prefs.getString("weather_sky", "1") ?: "1"
+            windDir = prefs.getString("weather_wind_dir", "--") ?: "--"
+            windSpd = prefs.getString("weather_wind_spd", "--") ?: "--"
         }
         repo.fetchHourlyForecastNext5Hours { hourly = it }
         repo.fetchDailyHighLow {
-            val h = prefs.getString("weather_daily_high","--") ?: "--"
-            val l = prefs.getString("weather_daily_low","--")  ?: "--"
-            highLow = "$h°C/$l°C"
+            val h = prefs.getString("weather_daily_high", "--") ?: "--"
+            val l = prefs.getString("weather_daily_low", "--") ?: "--"
+            highLow = "${h}°C/${l}°C"
         }
-
     }
 
-    // 2) 앱 시작 시 한 번: 위치 조회
+    // 위치 및 미세먼지 초기 로드
     LaunchedEffect(Unit) {
+        repo.fetchNearestDust { a, b ->
+            pm10 = a
+            pm25 = b
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             repo.fetchLocation { loc ->
                 locationText = loc
-                repo.fetchStationForRegion("수지") { stations ->
-                    Log.d("MainActivity", "‘수지’ 포함 측정소: $stations")  // 여기서 ["용인시수지구"] 같은 이름이 보일 것
-                    stations.firstOrNull()?.let { station ->
-                        repo.fetchDustData(station) { pm10, pm25 ->
-                            Log.d("MainActivity", "PM10=$pm10, PM2.5=$pm25")
-                        }
-                    }
-                }
             }
-
         }
-
     }
 
-    // 3) 매초 시계 갱신
+    // 시계 업데이트
     LaunchedEffect(Unit) {
         while (true) {
             timeText = LocalDateTime.now()
@@ -165,11 +152,10 @@ fun WeatherApp(repo: WeatherRepository) {
         }
     }
 
-    // 배경색 결정
     val bg = when (ptyCode) {
-        "1","4" -> Color(0xFF90CAF9)
-        "2","3" -> Color(0xFFB3E5FC)
-        else    -> if (skyCode=="1") Color(0xFFFFF59D) else Color(0xFFCFD8DC)
+        "1", "4" -> Color(0xFF90CAF9)
+        "2", "3" -> Color(0xFFB3E5FC)
+        else -> if (skyCode == "1") Color(0xFFFFF59D) else Color(0xFFCFD8DC)
     }
 
     Surface(modifier = Modifier.fillMaxSize(), color = bg) {
@@ -180,20 +166,18 @@ fun WeatherApp(repo: WeatherRepository) {
                     title = {
                         Column {
                             Text(locationText, style = MaterialTheme.typography.bodySmall)
-                            Text(timeText,     style = MaterialTheme.typography.bodySmall)
+                            Text(timeText, style = MaterialTheme.typography.bodySmall)
                         }
                     },
                     actions = {
                         IconButton(onClick = {
-                            // 위치 포함 모든 데이터 리프레시
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                repo.fetchLocation { loc ->
-                                    locationText = loc
-                                }
+                                repo.fetchLocation { locationText = it }
                             }
-                            repo.fetchUltraShortNow { }
+                            repo.fetchUltraShortNow {}
                             repo.fetchHourlyForecastNext5Hours { hourly = it }
-                            repo.fetchDailyHighLow { }
+                            repo.fetchDailyHighLow {}
+                            repo.fetchNearestDust { a, b -> pm10 = a; pm25 = b }
                         }) {
                             Icon(Icons.Default.Refresh, contentDescription = "새로고침")
                         }
@@ -208,47 +192,45 @@ fun WeatherApp(repo: WeatherRepository) {
                     .fillMaxSize()
                     .padding(16.dp)
             ) {
-                // 요약 카드
                 Card(
                     Modifier
                         .fillMaxWidth()
-                        .height(100.dp),
+                        .height(120.dp),
                     colors = CardDefaults.cardColors(containerColor = bg)
                 ) {
-                    Row(
+                    Column(
                         Modifier
                             .fillMaxSize()
                             .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalArrangement = Arrangement.SpaceBetween
                     ) {
-                        val iconRes = when (ptyCode) {
-                            "1","4" -> R.drawable.img_2
-                            "2","3" -> R.drawable.img_3
-                            else    -> if (skyCode=="1") R.drawable.img else R.drawable.img_1
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            val iconRes = when (ptyCode) {
+                                "1", "4" -> R.drawable.img_2
+                                "2", "3" -> R.drawable.img_3
+                                else -> if (skyCode == "1") R.drawable.img else R.drawable.img_1
+                            }
+                            Icon(
+                                painterResource(iconRes),
+                                contentDescription = null,
+                                modifier = Modifier.size(48.dp),
+                                tint = Color.Unspecified
+                            )
+                            Spacer(Modifier.width(16.dp))
+                            Column {
+                                Text("${nowTemp}°C", style = MaterialTheme.typography.titleLarge)
+                                Text(highLow, style = MaterialTheme.typography.bodyMedium)
+                            }
                         }
-                        Icon(
-                            painterResource(iconRes),
-                            contentDescription = null,
-                            modifier = Modifier.size(48.dp),
-                            tint = Color.Unspecified
+                        Text(
+                            "미세먼지 PM10: $pm10 ㎍/m³, PM2.5: $pm25 ㎍/m³",
+                            style = MaterialTheme.typography.bodyMedium
                         )
-                        Spacer(Modifier.width(16.dp))
-                        Column {
-                            Text("$nowTemp°C", style = MaterialTheme.typography.titleLarge)
-                            Text(highLow,    style = MaterialTheme.typography.bodyMedium)
-                        }
                     }
                 }
 
                 Spacer(Modifier.height(16.dp))
-
-                // 온도 차트
-                TemperatureChart(
-                    data = hourly,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(200.dp)
-                )
+                TemperatureChart(data = hourly, modifier = Modifier.fillMaxWidth().height(200.dp))
 
                 Spacer(Modifier.height(16.dp))
 

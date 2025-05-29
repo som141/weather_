@@ -244,40 +244,85 @@ class WeatherRepository(private val context: Context) {
             }
         })
     }
-    fun fetchStationForRegion(
-        region: String,        // ex: "용인시 수지구"
-        onResult: (List<String>) -> Unit
-    ) {
-        RetrofitClient.airQualityService
-            .getStationList(serviceKey = misekey)
-            .enqueue(object : Callback<RealTimeStationListResponse> {
-                override fun onResponse(
-                    call: Call<RealTimeStationListResponse>,
-                    resp: Response<RealTimeStationListResponse>
-                ) {
-                    val stations = resp.body()
-                        ?.response
-                        ?.body
-                        ?.items
-                        ?.map { it.stationName }
-                        ?: emptyList()
 
-                    // 1) 공백으로 쪼개서 ["용인시","수지구"]
-                    val parts = region.split("\\s+".toRegex())
+    /**
+     * 내 현재 위경도 → TM 좌표로 변환 → 인근 측정소 1순위 → 미세먼지 값 조회
+     */
+    @SuppressLint("MissingPermission")
+    @RequiresApi(Build.VERSION_CODES.O)
+    fun fetchNearestDust(onComplete: (pm10: String, pm25: String) -> Unit) {
+        // 1) 권한, 위치 서비스 체크는 이미 구현된 fetchLocation 흐름 재활용
+        val fused = LocationServices.getFusedLocationProviderClient(context)
+        val token = CancellationTokenSource()
 
-                    // 2) stationName에 parts 중 하나라도 포함되면 통과
-                    val filtered = stations.filter { name ->
-                        parts.any { part -> name.contains(part) }
+        fused.getCurrentLocation(
+            com.google.android.gms.location.Priority.PRIORITY_HIGH_ACCURACY,
+            token.token
+        ).addOnSuccessListener { loc ->
+            if (loc == null) {
+                onComplete("--", "--")
+                return@addOnSuccessListener
+            }
+
+            // 2) → TM 좌표 변환 (환경공단 API용)
+            val tm = TMConverter.convert(loc.latitude, loc.longitude)
+            Log.d("WeatherRepo", "TM 변환 → x=${tm.x}, y=${tm.y}")
+
+            // 3) 인근 측정소 조회
+            RetrofitClient.airQualityService
+                .getNearbyStationList(misekey, tm.x, tm.y)
+                .enqueue(object : Callback<RealTimeStationListResponse> {
+                    override fun onResponse(
+                        call: Call<RealTimeStationListResponse>,
+                        resp: Response<RealTimeStationListResponse>
+                    ) {
+                        val station = resp.body()
+                            ?.response
+                            ?.body
+                            ?.items
+                            ?.firstOrNull()
+                            ?.stationName
+
+                        if (station.isNullOrEmpty()) {
+                            onComplete("--", "--")
+                            return
+                        }
+
+                        // 4) 해당 측정소로 미세먼지 값 조회
+                        RetrofitClient.airQualityService
+                            .getRealTimeDust(
+                                serviceKey = misekey,
+                                stationName = station
+                            ).enqueue(object : Callback<RealTimeDustResponse> {
+                                override fun onResponse(
+                                    call: Call<RealTimeDustResponse>,
+                                    resp2: Response<RealTimeDustResponse>
+                                ) {
+                                    val item = resp2.body()
+                                        ?.response
+                                        ?.body
+                                        ?.items
+                                        ?.firstOrNull()
+                                    val pm10 = item?.pm10 ?: "--"
+                                    val pm25 = item?.pm25 ?: "--"
+                                    prefs.edit()
+                                        .putString("weather_pm10", pm10)
+                                        .putString("weather_pm25", pm25)
+                                        .apply()
+                                    onComplete(pm10, pm25)
+                                }
+                                override fun onFailure(call: Call<RealTimeDustResponse>, t: Throwable) {
+                                    onComplete("--", "--")
+                                }
+                            })
                     }
-
-                    onResult(filtered)
-                }
-
-                override fun onFailure(call: Call<RealTimeStationListResponse>, t: Throwable) {
-                    Log.e("WeatherRepo", "fetchStationList failed", t)
-                    onResult(emptyList())
-                }
-            })
+                    override fun onFailure(call: Call<RealTimeStationListResponse>, t: Throwable) {
+                        onComplete("--", "--")
+                    }
+                })
+        }.addOnFailureListener {
+            onComplete("--", "--")
+        }
     }
     @RequiresApi(Build.VERSION_CODES.O)
     fun fetchDustData(

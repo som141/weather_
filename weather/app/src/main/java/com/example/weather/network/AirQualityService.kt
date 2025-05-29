@@ -26,4 +26,12 @@ interface AirQualityService {
         @Query("ver") ver: String = "1.3",
         @Query("returnType") returnType: String = "JSON"
     ): Call<RealTimeDustResponse>
+
+    @GET("B552584/MsrstnInfoInqireSvc/getNearbyMsrstnList")
+    fun getNearbyStationList(
+        @Query("serviceKey", encoded = true) serviceKey: String,
+        @Query("tmX") tmX: Double,
+        @Query("tmY") tmY: Double,
+        @Query("_returnType", encoded = true) returnType: String = "json"
+    ): Call<RealTimeStationListResponse>
 }
