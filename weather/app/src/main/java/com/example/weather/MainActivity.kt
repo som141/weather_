@@ -258,7 +258,19 @@ fun WeatherApp(repo: WeatherRepository) {
                         else-> "?"
                     }
                 }
-                val dirs = hourly.map { it.windDir }
+                val dirs = hourly.map { it.windDir.toFloatOrNull()?.let { deg ->
+                    when {
+                        deg in 337.5f..360f || deg in   0f..22.5f  -> "N"
+                        deg in  22.5f.. 67.5f                       -> "NE"
+                        deg in  67.5f..112.5f                       -> "E"
+                        deg in 112.5f..157.5f                       -> "SE"
+                        deg in 157.5f..202.5f                       -> "S"
+                        deg in 202.5f..247.5f                       -> "SW"
+                        deg in 247.5f..292.5f                       -> "W"
+                        deg in 292.5f..337.5f                       -> "NW"
+                        else                                        -> "--"
+                    }
+                } ?: "--" }
                 val spds = hourly.map { it.windSpd }
 
                 listOf(

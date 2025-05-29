@@ -47,7 +47,7 @@ class WeatherRepository(private val context: Context) {
     private var ny: Int = 127
 
     private val serviceKey = "nVI4pgoe68ebaYhYMSSCyBFeldG0NThgzKEsA6mfpCNJ7jNxG0qbRzeUvUtjN6S42+Ca+Vnp6+Md/NbOJ9Z5Ag=="
-    private val misekey="nVI4pgoe68ebaYhYMSSCyBFeldG0NThgzKEsA6mfpCNJ7jNxG0qbRzeUvUtjN6S42+Ca+Vnp6+Md/NbOJ9Z5Ag=="
+    private val misekey="nVI4pgoe68ebaYhYMSSCyBFeldG0NThgzKEsA6mfpCNJ7jNxG0qbRzeUvUtjN6S42%2BCa%2BVnp6%2BMd%2FNbOJ9Z5Ag%3D%3D"
     /**
      * 현재 디바이스 위치(시도·동)를 Geocoder로 조회하고
      * GridConverter로 격자좌표(nx,ny)를 업데이트
@@ -269,10 +269,11 @@ class WeatherRepository(private val context: Context) {
             Log.d("WeatherRepo", "TM 변환 → x=${tm.x}, y=${tm.y}")
 
             // 3) 인근 측정소 조회
-            RetrofitClient.airQualityService
+            val stationListCall = RetrofitClient.airQualityService
                 .getNearbyStationList(misekey, tm.x, tm.y)
-                .enqueue(object : Callback<RealTimeStationListResponse> {
-                    override fun onResponse(
+            Log.d("WeatherRepo", "NearbyStationList URL: ${stationListCall.request().url()}")
+            stationListCall.enqueue(object : Callback<RealTimeStationListResponse> {
+                override fun onResponse(
                         call: Call<RealTimeStationListResponse>,
                         resp: Response<RealTimeStationListResponse>
                     ) {
@@ -289,32 +290,39 @@ class WeatherRepository(private val context: Context) {
                         }
 
                         // 4) 해당 측정소로 미세먼지 값 조회
-                        RetrofitClient.airQualityService
-                            .getRealTimeDust(
-                                serviceKey = misekey,
-                                stationName = station
-                            ).enqueue(object : Callback<RealTimeDustResponse> {
-                                override fun onResponse(
-                                    call: Call<RealTimeDustResponse>,
-                                    resp2: Response<RealTimeDustResponse>
-                                ) {
-                                    val item = resp2.body()
-                                        ?.response
-                                        ?.body
-                                        ?.items
-                                        ?.firstOrNull()
-                                    val pm10 = item?.pm10 ?: "--"
-                                    val pm25 = item?.pm25 ?: "--"
-                                    prefs.edit()
-                                        .putString("weather_pm10", pm10)
-                                        .putString("weather_pm25", pm25)
-                                        .apply()
-                                    onComplete(pm10, pm25)
-                                }
-                                override fun onFailure(call: Call<RealTimeDustResponse>, t: Throwable) {
-                                    onComplete("--", "--")
-                                }
-                            })
+                    val dustCall = RetrofitClient.airQualityService
+                        .getRealTimeDust(
+                            serviceKey = misekey,
+                            stationName = station
+                        )
+// 실제 요청되는 URL을 로그로 찍고…
+                    Log.d("WeatherRepo", "RealTimeDust URL: ${dustCall.request().url()}")
+                    dustCall.enqueue(object : Callback<RealTimeDustResponse> {
+                        override fun onResponse(
+                            call: Call<RealTimeDustResponse>,
+                            resp2: Response<RealTimeDustResponse>
+                        ) {
+                            // 응답 바디도 찍어 봅니다
+                            Log.d("WeatherRepo", "Dust onResponse → code=${resp2.code()}, body=${resp2.body()}")
+                            val item = resp2.body()
+                                ?.response
+                                ?.body
+                                ?.items
+                                ?.firstOrNull()
+                            val pm10 = item?.pm10 ?: "--"
+                            val pm25 = item?.pm25 ?: "--"
+                            Log.d("WeatherRepo", "Fetched Dust → station=$station, pm10=$pm10, pm25=$pm25")
+                            prefs.edit()
+                                .putString("weather_pm10", pm10)
+                                .putString("weather_pm25", pm25)
+                                .apply()
+                            onComplete(pm10, pm25)
+                        }
+                        override fun onFailure(call: Call<RealTimeDustResponse>, t: Throwable) {
+                            Log.e("WeatherRepo", "fetchNearestDust → real-time dust failed", t)
+                            onComplete("--", "--")
+                        }
+                    })
                     }
                     override fun onFailure(call: Call<RealTimeStationListResponse>, t: Throwable) {
                         onComplete("--", "--")
@@ -324,40 +332,5 @@ class WeatherRepository(private val context: Context) {
             onComplete("--", "--")
         }
     }
-    @RequiresApi(Build.VERSION_CODES.O)
-    fun fetchDustData(
-        stationName: String,
-        onComplete: (pm10: String, pm25: String) -> Unit
-    ) {
-        RetrofitClient.airQualityService.getRealTimeDust(
-            serviceKey = misekey,
-            stationName = stationName
-        ).enqueue(object : Callback<RealTimeDustResponse> {
-            override fun onResponse(
-                call: Call<RealTimeDustResponse>,
-                resp: Response<RealTimeDustResponse>
-            ) {
-                val item = resp.body()
-                    ?.response
-                    ?.body
-                    ?.items  // 바로 리스트
-                    ?.firstOrNull()
 
-                val pm10 = item?.pm10 ?: "--"
-                val pm25 = item?.pm25 ?: "--"
-                Log.d("WeatherRepo", "Dust API URL: ${call.request().url()}")
-                // SharedPreferences 에도 저장해두면 나중에 Widget 등에서 편리합니다.
-                prefs.edit()
-                    .putString("weather_pm10", pm10)
-                    .putString("weather_pm25", pm25)
-                    .apply()
-
-                onComplete(pm10, pm25)
-            }
-
-            override fun onFailure(call: Call<RealTimeDustResponse>, t: Throwable) {
-                Log.e("WeatherRepo", "fetchDustData failed", t)
-                onComplete("--", "--")
-            }
-        })}
 }
