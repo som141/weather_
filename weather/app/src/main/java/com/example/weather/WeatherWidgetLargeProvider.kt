@@ -127,10 +127,10 @@ class WeatherWidgetLargeProvider : AppWidgetProvider() {
 
             // icon
             val iconRes = when (pty) {
-                "1","4" -> R.drawable.img_2
-                "2"      -> R.drawable.img_3
-                "3"      -> R.drawable.img_2
-                else      -> if (sky=="1") R.drawable.img else R.drawable.img_1
+                "1","4" -> R.drawable.rain
+                "2"      -> R.drawable.rainsnow
+                "3"      -> R.drawable.snow
+                else      -> if (sky=="1") R.drawable.sunny else R.drawable.cloude
             }
             views.setImageViewResource(R.id.iv_widget_weather_icon, iconRes)
 

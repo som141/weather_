@@ -206,9 +206,10 @@ fun WeatherApp(repo: WeatherRepository) {
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             val iconRes = when (ptyCode) {
-                                "1", "4" -> R.drawable.img_2
-                                "2", "3" -> R.drawable.img_3
-                                else -> if (skyCode == "1") R.drawable.img else R.drawable.img_1
+                                "1", "4" -> R.drawable.rain
+                                "2" -> R.drawable.rainsnow
+                                "3" ->R.drawable.snow
+                                else -> if (skyCode == "1") R.drawable.sunny else R.drawable.cloude
                             }
                             Icon(
                                 painterResource(iconRes),
