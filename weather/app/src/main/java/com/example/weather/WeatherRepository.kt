@@ -271,7 +271,7 @@ class WeatherRepository(private val context: Context) {
             // 3) 인근 측정소 조회
             val stationListCall = RetrofitClient.airQualityService
                 .getNearbyStationList(misekey, tm.x, tm.y)
-            Log.d("WeatherRepo", "NearbyStationList URL: ${stationListCall.request().url()}")
+            Log.d("WeatherRepo", "NearbyStationList URL: ${stationListCall.request().url}")
             stationListCall.enqueue(object : Callback<RealTimeStationListResponse> {
                 override fun onResponse(
                         call: Call<RealTimeStationListResponse>,
@@ -296,7 +296,7 @@ class WeatherRepository(private val context: Context) {
                             stationName = station
                         )
 // 실제 요청되는 URL을 로그로 찍고…
-                    Log.d("WeatherRepo", "RealTimeDust URL: ${dustCall.request().url()}")
+                    Log.d("WeatherRepo", "RealTimeDust URL: ${dustCall.request().url}")
                     dustCall.enqueue(object : Callback<RealTimeDustResponse> {
                         override fun onResponse(
                             call: Call<RealTimeDustResponse>,

@@ -14,9 +14,9 @@ import android.os.Build
 import android.widget.RemoteViews
 import androidx.annotation.RequiresApi
 import androidx.annotation.RequiresPermission
+import androidx.core.content.ContextCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
-import androidx.core.content.ContextCompat
 import com.example.weather.R
 import com.example.weather.WeatherRepository
 import java.time.LocalDateTime
@@ -28,6 +28,7 @@ class WeatherWidgetLargeProvider : AppWidgetProvider() {
         private const val NOTIF_ID   = 1001
     }
 
+    @RequiresApi(Build.VERSION_CODES.O)
     override fun onEnabled(context: Context) {
         super.onEnabled(context)
         createNotificationChannel(context)
@@ -134,8 +135,8 @@ class WeatherWidgetLargeProvider : AppWidgetProvider() {
             }
             views.setImageViewResource(R.id.iv_widget_weather_icon, iconRes)
 
-            // graph
-            val bmp = createTempGraph(data)
+            // graph: pass bgColor to match widget
+            val bmp = createTempGraph(data, bgColor)
             views.setImageViewBitmap(R.id.iv_widget_temp_graph, bmp)
 
             // 클릭
@@ -175,6 +176,7 @@ class WeatherWidgetLargeProvider : AppWidgetProvider() {
         NotificationManagerCompat.from(context).notify(NOTIF_ID, notif)
     }
 
+    @RequiresApi(Build.VERSION_CODES.O)
     private fun createNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val chan = NotificationChannel(
@@ -184,8 +186,16 @@ class WeatherWidgetLargeProvider : AppWidgetProvider() {
             .createNotificationChannel(chan)
     }
 
+    /**
+     * 5시간치 기온 그래프 생성
+     * @param data 시간별 예보 리스트
+     * @param bgColor 위젯 배경색과 맞추기 위한 배경색
+     */
     @RequiresApi(Build.VERSION_CODES.O)
-    private fun createTempGraph(data: List<HourlyForecast>): Bitmap {
+    private fun createTempGraph(
+        data: List<HourlyForecast>,
+        bgColor: Int
+    ): Bitmap {
         val width  = 170
         val height = 120
         val marginLeft   = 24
@@ -194,7 +204,7 @@ class WeatherWidgetLargeProvider : AppWidgetProvider() {
         val marginBottom = 24
 
         val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bmp).apply { drawColor(Color.WHITE) }
+        val canvas = Canvas(bmp).apply { drawColor(bgColor) }
 
         if (data.size < 2) return bmp
 
@@ -208,18 +218,34 @@ class WeatherWidgetLargeProvider : AppWidgetProvider() {
         val graphH = height - marginTop  - marginBottom
         val stepX  = graphW.toFloat() / (temps.size - 1)
 
+        // axis paint
         val paintAxis = Paint().apply {
             style       = Paint.Style.STROKE; strokeWidth = 2f
             color       = Color.BLACK; isAntiAlias = true
         }
+        // grid paint for subtle dashed lines
+        val paintGrid = Paint().apply {
+            style       = Paint.Style.STROKE; strokeWidth = 1f
+            color       = Color.LTGRAY; isAntiAlias = true
+            pathEffect  = DashPathEffect(floatArrayOf(8f, 8f), 0f)
+        }
+        // text labels
         val paintText = Paint().apply {
             style       = Paint.Style.FILL; textSize = 8f
-            color       = Color.BLACK; isAntiAlias = true
+            color       = Color.DKGRAY; isAntiAlias = true
         }
+        // line paint
         val paintLine = Paint().apply {
             style       = Paint.Style.STROKE; strokeWidth = 3f
             color       = Color.parseColor("#1565C0"); isAntiAlias = true
         }
+        // area under curve
+        val paintArea = Paint().apply {
+            style       = Paint.Style.FILL
+            color       = Color.parseColor("#1565C0").let { it and 0x80FFFFFF.toInt() }
+            isAntiAlias = true
+        }
+        // dot paint
         val paintDot = Paint().apply {
             style       = Paint.Style.FILL
             color       = Color.parseColor("#0D47A1"); isAntiAlias = true
@@ -227,17 +253,36 @@ class WeatherWidgetLargeProvider : AppWidgetProvider() {
 
         val x0 = marginLeft.toFloat()
         val y0 = (height - marginBottom).toFloat()
+        // draw grid horizontal
+        val stepY = graphH / 4f
+        repeat(5) { i ->
+            val y = marginTop + i * stepY
+            canvas.drawLine(x0, y, (width - marginRight).toFloat(), y, paintGrid)
+        }
+        // draw axes
         canvas.drawLine(x0, marginTop.toFloat(), x0, y0, paintAxis)
         canvas.drawLine(x0, y0, (width - marginRight).toFloat(), y0, paintAxis)
 
+        // draw min/max labels
         canvas.drawText("${maxT.toInt()}°", 0f, marginTop + paintText.textSize, paintText)
         canvas.drawText("${minT.toInt()}°", 0f, y0 + paintText.textSize, paintText)
 
+        // compute points
         val pts = temps.mapIndexed { i, t ->
             val x = marginLeft + i * stepX
             val y = marginTop + graphH - ((t - minT) / range) * graphH
             PointF(x, y)
         }
+        // draw filled area
+        val areaPath = Path().apply {
+            moveTo(pts.first().x, pts.first().y)
+            pts.forEach { lineTo(it.x, it.y) }
+            lineTo(pts.last().x, y0)
+            lineTo(pts.first().x, y0)
+            close()
+        }
+        canvas.drawPath(areaPath, paintArea)
+        // draw line and dots
         pts.forEachIndexed { i, p ->
             if (i < pts.lastIndex) {
                 val n = pts[i + 1]
@@ -248,7 +293,7 @@ class WeatherWidgetLargeProvider : AppWidgetProvider() {
             val tw  = paintText.measureText(txt)
             canvas.drawText(txt, p.x - tw / 2, p.y - 6f, paintText)
         }
-
+        // draw time labels
         pts.forEachIndexed { i, p ->
             val lbl = times[i]
             val tw  = paintText.measureText(lbl)

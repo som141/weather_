@@ -33,6 +33,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
+import coil.compose.AsyncImage
 import com.example.weather.ui.theme.WeatherTheme
 import com.google.android.gms.location.LocationServices
 import kotlinx.coroutines.delay
@@ -211,11 +212,10 @@ fun WeatherApp(repo: WeatherRepository) {
                                 "3" ->R.drawable.snow
                                 else -> if (skyCode == "1") R.drawable.sunny else R.drawable.cloude
                             }
-                            Icon(
-                                painterResource(iconRes),
+                            AsyncImage(
+                                model = iconRes,
                                 contentDescription = null,
-                                modifier = Modifier.size(48.dp),
-                                tint = Color.Unspecified
+                                modifier = Modifier.size(48.dp)
                             )
                             Spacer(Modifier.width(16.dp))
                             Column {
