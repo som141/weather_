@@ -1,5 +1,7 @@
-package com.example.weather.network
+package com.example.weather
 
+import com.example.weather.network.AirQualityService
+import com.example.weather.network.ApiService
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory

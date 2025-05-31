@@ -15,7 +15,9 @@ import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import com.example.weather.model.RealTimeDustResponse
 import com.example.weather.model.RealTimeStationListResponse
-import com.example.weather.network.RetrofitClient
+import com.example.weather.RetrofitClient
+import com.example.weather.utill.GridConverter
+import com.example.weather.utill.TMConverter
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.tasks.CancellationTokenSource
 import retrofit2.Call
