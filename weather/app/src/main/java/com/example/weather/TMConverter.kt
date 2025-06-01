@@ -1,6 +1,4 @@
 package com.example.weather
-
-
 import kotlin.math.*
 
 // TM(Transverse Mercator) 좌표계 변환기 (EPSG:5181 기준)
