@@ -6,14 +6,12 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
-import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
@@ -23,20 +21,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.PaintingStyle.Companion.Stroke
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
+import coil.compose.AsyncImage
 import com.example.weather.ui.theme.WeatherTheme
-import com.google.android.gms.location.LocationServices
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.tasks.await
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.TimeZone
@@ -206,15 +201,15 @@ fun WeatherApp(repo: WeatherRepository) {
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             val iconRes = when (ptyCode) {
-                                "1", "4" -> R.drawable.img_2
-                                "2", "3" -> R.drawable.img_3
-                                else -> if (skyCode == "1") R.drawable.img else R.drawable.img_1
+                                "1", "4" -> R.drawable.rain
+                                "2" -> R.drawable.rainsnow
+                                "3" ->R.drawable.snow
+                                else -> if (skyCode == "1") R.drawable.sunny else R.drawable.cloude
                             }
-                            Icon(
-                                painterResource(iconRes),
+                            AsyncImage(
+                                model = iconRes,
                                 contentDescription = null,
-                                modifier = Modifier.size(48.dp),
-                                tint = Color.Unspecified
+                                modifier = Modifier.size(48.dp)
                             )
                             Spacer(Modifier.width(16.dp))
                             Column {
