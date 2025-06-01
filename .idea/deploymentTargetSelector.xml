@@ -2,16 +2,7 @@
 <project version="4">
   <component name="deploymentTargetSelector">
     <selectionStates>
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-      <SelectionState runConfigName="MainActivity">
-        <option name="selectionMode" value="DROPDOWN" />
-      </SelectionState>
-=======
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
-      <SelectionState runConfigName="MainActivity (1)">
+      <SelectionState runConfigName="weather.app">
         <option name="selectionMode" value="DROPDOWN" />
       </SelectionState>
       <SelectionState runConfigName="MainActivity">

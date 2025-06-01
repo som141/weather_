@@ -47,7 +47,7 @@ class WeatherWidgetLargeProvider : AppWidgetProvider() {
         repo.fetchUltraShortNow {
             repo.fetchDailyHighLow {
                 repo.fetchHourlyForecastNext5Hours { list ->
-                    // 2) “현재 맑음 → 3시간 뒤 나쁨”이면 알림
+                    // “현재 맑음(isGood) & 3시간 뒤 비·눈·비눈(isBad)”일 때만 알림
                     if (list.size > 3 && isGood(list[0]) && isBad(list[3])) {
                         val canNotify = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                             ContextCompat.checkSelfPermission(
@@ -55,8 +55,12 @@ class WeatherWidgetLargeProvider : AppWidgetProvider() {
                                 Manifest.permission.POST_NOTIFICATIONS
                             ) == PackageManager.PERMISSION_GRANTED
                         } else true
-                        if (canNotify) sendWeatherAlert(context, list[3])
+
+                        if (canNotify) {
+                            sendWeatherAlert(context, list[3])
+                        }
                     }
+
                     // 3) 위젯 화면 업데이트
                     updateAllWidgets(context, mgr, ids, list)
                 }
@@ -102,7 +106,7 @@ class WeatherWidgetLargeProvider : AppWidgetProvider() {
             val bgColor = when (pty) {
                 "1","4" -> Color.parseColor("#90CAF9")
                 "2","3" -> Color.parseColor("#B3E5FC")
-                else       -> if (sky=="1") Color.parseColor("#FFF59D") else Color.parseColor("#CFD8DC")
+                else    -> if (sky=="1") Color.parseColor("#FFF59D") else Color.parseColor("#CFD8DC")
             }
             views.setInt(R.id.widget_root, "setBackgroundColor", bgColor)
 
@@ -131,7 +135,7 @@ class WeatherWidgetLargeProvider : AppWidgetProvider() {
                 "1","4" -> R.drawable.rain
                 "2"      -> R.drawable.rainsnow
                 "3"      -> R.drawable.snow
-                else      -> if (sky=="1") R.drawable.sunny else R.drawable.cloude
+                else     -> if (sky=="1") R.drawable.sunny else R.drawable.cloude
             }
             views.setImageViewResource(R.id.iv_widget_weather_icon, iconRes)
 
@@ -147,19 +151,23 @@ class WeatherWidgetLargeProvider : AppWidgetProvider() {
         }
     }
 
+    // “안 좋음” 기준: 비·눈·비눈 (precip != "0")
+    private fun isBad(f: HourlyForecast): Boolean =
+        f.precip != "0"
+
+    // “좋음” 기준: 하늘 맑음 & 강수 없음
     private fun isGood(f: HourlyForecast): Boolean =
         f.sky == "1" && f.precip == "0"
-    private fun isBad(f: HourlyForecast): Boolean =
-        f.precip != "0" || f.sky != "1"
 
     @RequiresPermission(Manifest.permission.POST_NOTIFICATIONS)
     @RequiresApi(Build.VERSION_CODES.O)
     private fun sendWeatherAlert(context: Context, forecast: HourlyForecast) {
         val whenStr = forecast.time.format(DateTimeFormatter.ofPattern("HH:mm"))
-        val body = when {
-            forecast.precip != "0" -> "$whenStr 에 비가 올 예정입니다."
-            forecast.sky    != "1" -> "$whenStr 에 흐릴 예정입니다."
-            else                   -> "$whenStr 에 날씨 변화 주의"
+        val body = when (forecast.precip) {
+            "1","4" -> "$whenStr 에 비가 올 예정입니다."
+            "2"      -> "$whenStr 에 비/눈이 올 예정입니다."
+            "3"      -> "$whenStr 에 눈이 올 예정입니다."
+            else     -> "$whenStr 에 날씨 변화 주의"
         }
         val pi = PendingIntent.getActivity(
             context, 0,
@@ -170,6 +178,7 @@ class WeatherWidgetLargeProvider : AppWidgetProvider() {
         val notif = NotificationCompat.Builder(context, CHANNEL_ID)
             .setContentTitle("3시간 후 날씨 알림")
             .setContentText(body)
+            .setSmallIcon(R.drawable.ic_refresh) // 24×24dp 흑백 아이콘으로 교체하세요
             .setContentIntent(pi)
             .setAutoCancel(true)
             .build()
